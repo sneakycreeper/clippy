@@ -1,101 +1,105 @@
 # Clippy
 
-Grabador de repeticiones instantáneas para Windows, ultraliviano: graba siempre en segundo plano
-(en RAM) y con una tecla (F9) guarda los últimos segundos como MP4. Todo el video pasa por la GPU
-(DXGI Desktop Duplication → D3D11 NV12 → encoder H.264 por hardware de Media Foundation).
+[English](README.md) | [Español](README.es.md)
 
-Descarga y novedades en [clpy.vercel.app](https://clpy.vercel.app). Las versiones se publican en
-los [Releases](https://github.com/santiremedi/clippy/releases) de este repo, que es donde las busca
-el actualizador automático.
+An ultralight instant-replay recorder for Windows. It continuously records in the background
+(in RAM), and pressing one key (F9) saves the last few seconds as an MP4. The entire video path
+runs on the GPU (DXGI Desktop Duplication → D3D11 NV12 → Media Foundation H.264 hardware encoder).
 
-## Compilar
+The interface supports English, Spanish, and Portuguese. Automatic mode follows the Windows
+display language, and a specific language can be selected under General → Language.
+
+Downloads and news are available at [clpy.vercel.app](https://clpy.vercel.app). Published versions
+are available from the [upstream releases](https://github.com/santiremedi/clippy/releases), which
+are also used by the automatic updater.
+
+## Building
 
 ```bash
 cargo build --release
 ```
 
-El exe queda en `target/release/clippy.exe`. Para publicar se renombra a `Clippy.exe`
-(el actualizador busca ese nombre exacto en el último release de `santiremedi/clippy`).
+The executable is created at `target/release/clippy.exe`. For publishing, it is renamed to
+`Clippy.exe` because the updater looks for that exact asset name in the latest release.
 
-Para probar mientras desarrollás, con los modos de prueba sin ventana (no van en el exe publicado).
-Compila en segundos porque no usa LTO; queda en `target/fast/clippy.exe`:
+For development and the windowless test modes, use the fast profile. It skips LTO and usually
+builds in seconds; the result is `target/fast/clippy.exe`:
 
 ```bash
 cargo build --profile fast --features devtools
 ```
 
-## Modos del mismo .exe
+## Executable modes
 
-| Argumentos | Qué hace |
+| Arguments | Behavior |
 | --- | --- |
-| (ninguno) / `--background` | Grabadora con ícono en la bandeja (`--background`: sin abrir la ventana, para el inicio con Windows). |
-| `--settings` | Ventana principal / ajustes. |
-| `--editor [archivo]` | Editor de clips. |
-| `--apply-update <ruta>` | Lo usa el actualizador: reemplaza el exe instalado y lo vuelve a abrir. |
+| (none) / `--background` | Recorder with a system-tray icon (`--background` starts it without opening a window, for Windows startup). |
+| `--settings` | Main window and settings. |
+| `--editor [file]` | Clip editor. |
+| `--apply-update <path>` | Used by the updater to replace the installed executable and reopen it. |
 
-Solo con `--features devtools`:
+Only with `--features devtools`:
 
-| Argumentos | Qué hace |
+| Arguments | Behavior |
 | --- | --- |
-| `--test <seg> <carpeta> [game\|desktop\|mic\|juegos\|720\|1080\|1440]` | Graba, guarda un clip y sale (imprime el encoder y el juego detectado; un número elige la resolución del clip). |
-| `--test-mic` | Cuánto audio entrega cada micrófono en 3 s. |
-| `--test-download` | Descarga la versión publicada como el botón "Actualizar". |
-| `--test-export`, `--test-frame`, `--test-strip` | Pruebas del editor (ver `src/editor/devtools.rs`). |
+| `--test <seconds> <folder> [game\|desktop\|mic\|juegos\|720\|1080\|1440]` | Records, saves a clip, and exits. It prints the encoder and detected game; a number selects the clip resolution. |
+| `--test-mic` | Measures how much audio each microphone provides in 3 seconds. |
+| `--test-download` | Downloads the published version like the Update button. |
+| `--test-export`, `--test-frame`, `--test-strip` | Editor tests; see `src/editor/devtools.rs`. |
 
-## Mapa del código
+## Code map
 
 ```
 src/
-  main.rs          elige el modo
-  config.rs        config.json (grabación, audio, atajos globales, idioma)
-  i18n.rs          idioma de la interfaz (español, inglés, portugués; "auto" sigue a Windows) y `tr!`
-  log.rs           %APPDATA%\Clippy, clippy.log y marcas de tiempo
-  mf.rs            Media Foundation y el formato de audio de toda la app (PCM 48 kHz estéreo, AAC)
-  clipcache.rs     caché de forma de onda y fotogramas clave por clip (la escribe la grabadora, la lee el editor)
-  app/             el proceso como app de Windows
-    mode.rs        modos, argumentos, candados, títulos de ventana, mensajes a la bandeja
-    tray.rs        bandeja, atajos globales, controla la grabadora
-    update.rs      actualizaciones (una consulta por día a Releases, como mucho)
-    autostart.rs   inicio con Windows (HKCU\...\Run)
-    keys.rs        nombres de teclas Win32
-  record/          grabación
-    recorder.rs    hilo de grabación: captura -> encoder -> buffer -> guardar
-    game.rs        qué es "el juego" (ventana en pantalla completa), para video y audio
+  main.rs          selects the executable mode
+  config.rs        config.json (recording, audio, global shortcuts, language)
+  i18n.rs          interface languages (Spanish, English, Portuguese; auto follows Windows) and `tr!`
+  log.rs           %APPDATA%\Clippy, clippy.log, and timestamps
+  mf.rs            Media Foundation and the app-wide audio format (48 kHz stereo PCM, AAC)
+  clipcache.rs     per-clip waveform and keyframe cache (written by the recorder, read by the editor)
+  app/             Windows application process
+    mode.rs        modes, arguments, single-instance locks, window titles, and tray messages
+    tray.rs        system tray, global shortcuts, and recorder control
+    update.rs      updates (at most one Releases request per day)
+    autostart.rs   Windows startup (HKCU\...\Run)
+    keys.rs        Win32 key names
+  record/          recording
+    recorder.rs    recording thread: capture -> encoder -> buffer -> save
+    game.rs        game detection (full-screen window), used for video and audio
     capture.rs, convert.rs, encoder.rs, audio.rs, mux.rs, clock.rs
-  settings/        ventana principal (mod.rs: estado; pages.rs: páginas)
-  editor/          editor de clips (proceso aparte)
-    mod.rs         ventana y bucle principal
-    timeline.rs    pistas y piezas (video y audio unidos), imán, fundidos, deshacer
-    playback.rs    reproducción: un reproductor por pieza que se ve o se oye, capas y fundidos
-    export.rs      diálogo y trabajo de exportación
-    panels.rs      barra de arriba y línea de tiempo (pistas, marcadores, clic derecho en un clip)
-    browser.rs     panel de la biblioteca: elegir, carpetas, mover y mandar a la Papelera
-    inspector.rs   panel del clip: imagen, velocidad y sonido
-    preview.rs     vista previa: lienzo con su proporción y recorte de la imagen
-    prefs.rs       editor.json (atajos, últimas opciones de exportación, paneles, imán)
-    media.rs       exportar: copia sin recodificar o capas ubicadas y fundidas por GPU, velocidad, mezcla de audio
+  settings/        main window (mod.rs: state; pages.rs: pages)
+  editor/          clip editor (separate process)
+    mod.rs         window and main loop
+    timeline.rs    tracks and pieces, linked video/audio, snapping, fades, and undo
+    playback.rs    playback, visible/audible piece players, layers, and fades
+    export.rs      export dialog and job
+    panels.rs      top bar and timeline (tracks, markers, clip context menu)
+    browser.rs     library panel: selection, folders, moving, and Recycle Bin
+    inspector.rs   clip panel: image, speed, and sound
+    preview.rs     preview canvas, aspect ratio, and image crop
+    prefs.rs       editor.json (shortcuts, latest export options, panels, snapping)
+    media.rs       export: stream copy or GPU-positioned/blended layers, speed, and audio mixing
     shortcuts.rs, library.rs, player.rs, devtools.rs
-  ui_kit/          estilo y widgets, ventanas nativas, íconos, sonidos
-    watch.rs       despierta una ventana cuando algo cambia afuera (sin repintar en reposo)
+  ui_kit/          styling, widgets, native windows, icons, and sounds
+    watch.rs       wakes a window when external state changes, without repainting while idle
 ```
 
-## Archivos del usuario
+## User files
 
-Todo en `%APPDATA%\Clippy`: `config.json`, `editor.json`, `library.json`, `update.json`,
-`clippy.log` y `cache\`.
+Everything is stored under `%APPDATA%\Clippy`: `config.json`, `editor.json`, `library.json`,
+`update.json`, `clippy.log`, and `cache\`.
 
-## Publicar una versión
+## Publishing a version
 
-1. Subir la versión en `Cargo.toml`.
-2. En GitHub → Actions → **Build** → *Run workflow*, con el tag (por ejemplo `v0.3.0`) y
-   "Publicar el release" tildado. El workflow compila y sube `Clippy.exe` al release de este repo
-   (si no existe, lo crea como borrador). Sin tildarlo, igual compila y deja el exe como artefacto descargable.
-3. Escribir el texto del release para quien usa la app (Clippy lo muestra como novedades: títulos `#`,
-   viñetas `-` y párrafos, sin `**` ni comillas invertidas) y recién ahí publicarlo. Un release publicado
-   sin texto no muestra novedades.
+1. Increase the version in `Cargo.toml`.
+2. Open GitHub → Actions → **Build** → *Run workflow*, enter a tag such as `v0.3.0`, and select
+   “Publish release.” The workflow builds and uploads `Clippy.exe`; if the release does not exist,
+   it creates a draft. Without that option, the executable is still available as a workflow artifact.
+3. Write user-facing release notes before publishing. Clippy displays headings (`#`), lists (`-`),
+   and paragraphs, without bold markers or backticks. A published release without text does not show news.
 
-## Licencia
+## License
 
-[GPL-3.0-or-later](LICENSE). Podés usar, estudiar, cambiar y redistribuir Clippy; si distribuís una
-versión modificada, tiene que ser con su código y bajo la misma licencia. El nombre "Clippy" y su
-ícono no se pueden usar para identificar versiones modificadas.
+[GPL-3.0-or-later](LICENSE). You may use, study, modify, and redistribute Clippy. Distributed modified
+versions must include their source code under the same license. The “Clippy” name and icon may not be
+used to identify modified versions.
